@@ -145,7 +145,7 @@ final class AnisetteDataHelper
     func provision() async throws -> AnisetteData {
         try await fetchClientInfo()
             self.printOut("Getting provisioning URLs")
-            var request = self.buildAppleRequest(url: URL(string: "https://gsa.apple.com/grandslam/GsService2/lookup")!)
+            var request = self.buildAppleRequest(url: URL(string: "https://gsa.apple.com/grandslam/GsService2/lookup")!, isUrlBagLookup: true)
             request.httpMethod = "GET"
         let (data, response) = try await URLSession.shared.data(for: request)
         if
@@ -311,9 +311,13 @@ final class AnisetteDataHelper
         return components.url ?? url
     }
     
-    func buildAppleRequest(url: URL) -> URLRequest {
+    // isideload's reference sends this Mac-style string ONLY for the URL bag lookup
+    // (GsService2/lookup) -- using it everywhere else gets the account GSA-flagged (-80045).
+    static let urlBagClientInfo = "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
+
+    func buildAppleRequest(url: URL, isUrlBagLookup: Bool = false) -> URLRequest {
         var request = URLRequest(url: url)
-        request.setValue(self.clientInfo!, forHTTPHeaderField: "X-Mme-Client-Info")
+        request.setValue(isUrlBagLookup ? Self.urlBagClientInfo : self.clientInfo!, forHTTPHeaderField: "X-Mme-Client-Info")
         request.setValue(self.userAgent!, forHTTPHeaderField: "User-Agent")
         request.setValue("text/x-xml-plist", forHTTPHeaderField: "Content-Type")
         request.setValue("*/*", forHTTPHeaderField: "Accept")
@@ -350,10 +354,11 @@ final class AnisetteDataHelper
         
         self.printOut("Using custom client_info")
                         
-        // Matches the User-Agent akd itself sends (isideload's fix for the same
-        // GSA -80045/503 block on com.apple.dt.Xcode in the client-info string);
-        // an AuthKit-style User-Agent here still gets blocked even with akd in client_info.
-        self.clientInfo = "<iMac18,3> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
+        // isideload's reference uses this Android-style string for every GrandSlam request
+        // EXCEPT the URL bag lookup (which lies and sends a Mac string -- see buildAppleRequest).
+        // Using the Mac string here too (as a prior fix attempt did) mismatches the verified
+        // working client and is a plausible source of -80045.
+        self.clientInfo = "<Pixel 7> <Android;14;UQ1A.240205.002> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
         self.userAgent = "akd/1.0 CFNetwork/808.1.4"
         self.printOut("Client-Info: \(self.clientInfo!)")
         self.printOut("User-Agent: \(self.userAgent!)")
