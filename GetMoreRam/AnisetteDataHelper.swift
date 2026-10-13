@@ -347,8 +347,11 @@ final class AnisetteDataHelper
         
         self.printOut("Using custom client_info")
                         
+        // Matches the User-Agent akd itself sends (isideload's fix for the same
+        // GSA -80045/503 block on com.apple.dt.Xcode in the client-info string);
+        // an AuthKit-style User-Agent here still gets blocked even with akd in client_info.
         self.clientInfo = "<iMac18,3> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>"
-        self.userAgent = "AuthKit/1 (Macintosh; OS X 27.0) (com.apple.akd/1.0)"
+        self.userAgent = "akd/1.0 CFNetwork/808.1.4"
         self.printOut("Client-Info: \(self.clientInfo!)")
         self.printOut("User-Agent: \(self.userAgent!)")
         
