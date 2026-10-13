@@ -1,6 +1,8 @@
 # Get More Ram
 A simple [StosSign](https://github.com/stossy11/StosSign) wrapper app that allows you to enable "Increased Memory Limit" for your sideloaded apps without using Xcode.
 
+This fork pins a [patched StosSign](https://github.com/m7830380-cyber/StosSign) that fixes Apple sign-in error **-80045** ("This action cannot be completed at this time") by using the Android AuthKit client identifier instead of the now-blocked Mac/Xcode one, the same fix shipped in [nab138/iloader v2.3.7](https://github.com/nab138/iloader/releases/tag/v2.3.7). Note: as with iloader, this may break SMS-based two-factor authentication; trusted-device 2FA and accounts without 2FA are unaffected.
+
 # How to use
 1. Sideload this app
 2. Go to settings, sign in your account that you used to sign the app you want to enable "Increased Memory Limit"
