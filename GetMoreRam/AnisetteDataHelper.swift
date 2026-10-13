@@ -317,6 +317,9 @@ final class AnisetteDataHelper
         request.setValue(self.userAgent!, forHTTPHeaderField: "User-Agent")
         request.setValue("text/x-xml-plist", forHTTPHeaderField: "Content-Type")
         request.setValue("*/*", forHTTPHeaderField: "Accept")
+        request.setValue("com.apple.gs.xcode.auth", forHTTPHeaderField: "X-Apple-App-Info")
+        request.setValue("27.0 (27A5218g)", forHTTPHeaderField: "X-Xcode-Version")
+        request.setValue("close", forHTTPHeaderField: "Connection")
 
         request.setValue(self.mdLu!, forHTTPHeaderField: "X-Apple-I-MD-LU")
         request.setValue(self.deviceId!, forHTTPHeaderField: "X-Mme-Device-Id")
