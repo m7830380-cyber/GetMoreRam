@@ -30,6 +30,9 @@ final class AnisetteDataHelper
     
     static var shared: AnisetteDataHelper = AnisetteDataHelper()
     
+    private static let anisetteStateVersionKey = "AnisetteStateVersion"
+    private static let anisetteStateVersion = 2
+    
     var loggingFunc: ((String)->Void)?
     
     func resetClientInfo() {
@@ -48,6 +51,16 @@ final class AnisetteDataHelper
         
         self.printOut("Anisette URL: \(self.url!.absoluteString)")
         
+        // isideload reset every stored anisette state when it switched to the android
+        // client info; states provisioned under the old client info make GSA reject logins.
+        if UserDefaults.standard.integer(forKey: Self.anisetteStateVersionKey) != Self.anisetteStateVersion {
+            self.printOut("Resetting anisette state provisioned with an old client info")
+            Keychain.shared.adiPb = nil
+            Keychain.shared.identifier = nil
+            resetClientInfo()
+            UserDefaults.standard.set(Self.anisetteStateVersion, forKey: Self.anisetteStateVersionKey)
+        }
+        
         let ans : AnisetteData
         if let identifier = Keychain.shared.identifier,
            let adiPb = Keychain.shared.adiPb {
@@ -56,6 +69,15 @@ final class AnisetteDataHelper
             ans = try await self.provision()
         }
         return ans
+    }
+    
+    // GSA asks for this with Status.hsc 434 when the anisette state needs a resync.
+    func resyncAnisetteData(sim: String) async throws -> AnisetteData {
+        guard let identifier = Keychain.shared.identifier,
+              let adiPb = Keychain.shared.adiPb else {
+            throw "Anisette is not provisioned"
+        }
+        return try await fetchAnisetteV3(identifier, adiPb, sim: sim)
     }
     
     // MARK: - COMMON
@@ -93,7 +115,7 @@ final class AnisetteDataHelper
                 let formatter = DateFormatter()
                 formatter.locale = Locale(identifier: "en_US_POSIX")
                 formatter.calendar = Calendar(identifier: .gregorian)
-                formatter.timeZone = TimeZone.current
+                formatter.timeZone = TimeZone(identifier: "UTC")
                 formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
                 let dateString = formatter.string(from: Date())
                 formattedJSON["date"] = dateString
@@ -428,16 +450,21 @@ final class AnisetteDataHelper
         */
     }
     
-    func fetchAnisetteV3(_ identifier: String, _ adiPb: String) async throws -> AnisetteData {
+    func fetchAnisetteV3(_ identifier: String, _ adiPb: String, sim: String? = nil) async throws -> AnisetteData {
         try await fetchClientInfo()
-        self.printOut("Fetching anisette V3")
-        let url = menuAnisetteURL
+        self.printOut(sim == nil ? "Fetching anisette V3" : "Resyncing anisette V3")
         var request = URLRequest(url: self.url!.appendingPathComponent("v3").appendingPathComponent("get_headers"))
         request.httpMethod = "POST"
-        request.httpBody = try! JSONSerialization.data(withJSONObject: [
+        var body = [
             "identifier": identifier,
             "adi_pb": adiPb
-        ], options: [])
+        ]
+        if let sim {
+            body["sim"] = sim
+            body["device_id"] = self.deviceId!
+            body["md_lu"] = self.mdLu!
+        }
+        request.httpBody = try! JSONSerialization.data(withJSONObject: body, options: [])
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let (data, response) = try await URLSession.shared.data(for: request)
         

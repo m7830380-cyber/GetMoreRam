@@ -79,7 +79,13 @@ class LoginViewModel: ObservableObject {
         do {
             let anisetteData = try await AnisetteDataHelper.shared.getAnisetteData()
 
-            let (account, session) = try await AppleAPI.shared.authenticate(appleID: appleID, password: password, anisetteData: anisetteData) { [weak self] completionHandler in
+            let (account, session) = try await AppleAPI.shared.authenticate(
+                appleID: appleID,
+                password: password,
+                anisetteData: anisetteData,
+                anisetteDataProvider: { try await AnisetteDataHelper.shared.getAnisetteData() },
+                anisetteResyncHandler: { sim in try await AnisetteDataHelper.shared.resyncAnisetteData(sim: sim) }
+            ) { [weak self] completionHandler in
                 guard let self else {
                     completionHandler(nil)
                     return
@@ -117,6 +123,11 @@ class LoginViewModel: ObservableObject {
         guard !isAuthenticationCancellationRequested else {
             handler(nil)
             return
+        }
+
+        // Being asked again right after a submission means Apple rejected the code.
+        if isVerificationCodeSubmitting {
+            logs.append("Incorrect verification code, please try again\n")
         }
 
         verificationCodeHandler = handler
