@@ -42,7 +42,38 @@ final class AnisetteDataHelper
         deviceId = nil
     }
     
+    static let fallbackServers = [
+        "https://ani.sidestore.io",
+        "https://ani.sidestore.app",
+        "https://ani.sidestore.zip",
+        "https://ani.846969.xyz",
+        "https://ani.npeg.us",
+    ]
+
     func getAnisetteData(refresh: Bool = false) async throws -> AnisetteData
+    {
+        let primary = url
+        var candidates: [URL] = primary.map { [$0] } ?? []
+        for s in Self.fallbackServers {
+            if let u = URL(string: s), !candidates.contains(where: { $0.host == u.host }) { candidates.append(u) }
+        }
+        var lastError: Error = "No Anisette Server Found!"
+        for candidate in candidates {
+            url = candidate
+            do {
+                return try await getAnisetteDataOnce(refresh: refresh)
+            } catch {
+                lastError = error
+                self.printOut("Anisette server \(candidate.host ?? "?") failed: \(error.localizedDescription)")
+                socket?.cancel(with: .goingAway, reason: nil)
+                socket = nil
+            }
+        }
+        url = primary
+        throw lastError
+    }
+
+    private func getAnisetteDataOnce(refresh: Bool) async throws -> AnisetteData
     {
         
         if url == nil {
@@ -85,7 +116,13 @@ final class AnisetteDataHelper
     func extractAnisetteData(_ data: Data, _ response: HTTPURLResponse?, v3: Bool) async throws -> AnisetteData {
         // make sure this JSON is in the format we expect
         // convert data to json
-        if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: String] {
+        guard let parsed = try? JSONSerialization.jsonObject(with: data, options: []) else {
+            let code = response?.statusCode ?? 0
+            let body = (String(data: data.prefix(300), encoding: .utf8) ?? "<binary>").replacingOccurrences(of: "\n", with: " ")
+            self.printOut("Anisette server returned non-JSON (HTTP \(code)): \(body)")
+            throw "Anisette server \(self.url?.host ?? "?") returned an invalid response (HTTP \(code)): \(body.isEmpty ? "<empty>" : body)\nTry another anisette server in Settings."
+        }
+        if let json = parsed as? [String: String] {
             if v3 {
                 if json["result"] == "GetHeadersError" {
                     let message = json["message"]
@@ -227,8 +264,8 @@ final class AnisetteDataHelper
     
     private func handleProvisioningMessage(_ string: String, socket: URLSessionWebSocketTask) async throws -> Bool {
         guard let data = string.data(using: .utf8),
-              let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
-            throw "The server didn't give valid JSON"
+              let json = (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any] else {
+            throw "The anisette server didn't give valid JSON during provisioning: \(string.prefix(200))"
         }
         
         guard let result = json["result"] as? String else {
